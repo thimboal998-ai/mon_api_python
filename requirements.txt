@@ -1,0 +1,35 @@
+# ============================================
+# REQUIREMENTS.TXT
+# Liste des bibliothèques nécessaires
+# ============================================
+
+# Flask & Extensions
+Flask
+Flask-SQLAlchemy
+Flask-Migrate
+Flask-Login
+
+# Authentification
+Authlib
+requests
+python-dotenv
+
+# Serveur Production
+gunicorn
+
+# Manipulation et Calcul de données
+pandas
+numpy
+scikit-learn
+
+# Lecture/Écriture Fichiers (Excel, XML)
+openpyxl
+XlsxWriter
+lxml
+
+# Génération de Rapports PDF
+reportlab
+
+# Visualisation de Données
+matplotlib
+seaborn

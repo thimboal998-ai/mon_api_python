@@ -1,0 +1,20 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fond dégradé -->
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Cercle de fond -->
+  <circle cx="32" cy="32" r="28" fill="url(#grad1)"/>
+  
+  <!-- Icône étoile sparkle -->
+  <path d="M32 16L33.5 24.5L38 26L33.5 27.5L32 36L30.5 27.5L26 26L30.5 24.5L32 16Z" fill="white"/>
+  <path d="M42 22L42.7 25.3L46 26L42.7 26.7L42 30L41.3 26.7L38 26L41.3 25.3L42 22Z" fill="white" opacity="0.7"/>
+  <path d="M22 22L22.7 25.3L26 26L22.7 26.7L22 30L21.3 26.7L18 26L21.3 25.3L22 22Z" fill="white" opacity="0.7"/>
+  
+  <!-- Texte "DC" -->
+  <text x="32" y="48" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white" text-anchor="middle">DC</text>
+</svg>

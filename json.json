@@ -1,0 +1,29 @@
+{
+  "entreprise": "TechCorp",
+  "annee": 2026,
+  "actif": true,
+  "adresse": {
+    "rue": "123 Rue de la République",
+    "ville": "Dakar",
+    "pays": "Sénégal"
+  },
+  "employes": [
+    {
+      "id": 1,
+      "nom": "Gabin Dupont",
+      "competences": [
+        "JavaScript",
+        "Python"
+      ]
+    },
+    {
+      "id": 2,
+      "nom": "Jane Smith",
+      "competences": [
+        "SQL",
+        "Gestion de projet"
+      ]
+    }
+  ],
+  "directeur": null
+}
