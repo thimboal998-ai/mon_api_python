@@ -24,6 +24,32 @@
     'use strict';
 
     // ========================================
+    // UTILITAIRES DE BASE (Avant Initialisation)
+    // ========================================
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    function throttle(func, limit) {
+        let inThrottle;
+        return function (...args) {
+            if (!inThrottle) {
+                func.apply(this, args);
+                inThrottle = true;
+                setTimeout(() => inThrottle = false, limit);
+            }
+        };
+    }
+
+    // ========================================
     // ÉTAT GLOBAL DE L'APPLICATION
     // ========================================
 
@@ -58,6 +84,7 @@
             sortColumn: null,
             sortDirection: 'asc',
             selectedRows: new Set(),
+            modifiedCells: [], // Liste des cellules nettoyées {row, col}
             filters: {},
             density: 'normal' // 'compact', 'normal', 'comfortable'
         },
@@ -455,10 +482,13 @@
     // ========================================
 
     function showConfigView(stats) {
-        console.log('\n⚙️  Affichage configuration...');
+        console.log('\n⚙️  Affichage configuration (Modal)...');
 
-        // Cacher upload, afficher config
-        showView('config');
+        const modal = document.getElementById('view-config');
+        if (modal) {
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden'; // Empêcher le scroll du body
+        }
 
         // Remplir les infos fichier
         document.getElementById('config-filename').textContent = app.currentFilename;
@@ -470,8 +500,17 @@
         document.getElementById('kpi-outliers').textContent = stats.lignes_avec_outliers || 0;
         document.getElementById('kpi-duplicates').textContent = stats.doublons || 0;
 
-        console.log('✅ Vue configuration affichée');
+        console.log('✅ Modal configuration affiché');
     }
+
+    // Exposer pour le bouton fermer et le backdrop
+    window.hideConfigModal = function () {
+        const modal = document.getElementById('view-config');
+        if (modal) {
+            modal.classList.add('hidden');
+            document.body.style.overflow = ''; // Réactiver le scroll
+        }
+    };
 
     // ========================================
     // NETTOYAGE DES DONNÉES
@@ -535,6 +574,9 @@
                 app.chartPaths = result.plot_paths;
                 app.csvFilename = result.csv_filename; // Store the server-generated filename
 
+                // Fermer le modal après nettoyage
+                window.hideConfigModal();
+
                 // Afficher le dashboard
                 showDashboardView(result.stats, result.plot_paths);
 
@@ -573,14 +615,20 @@
         if (stats.data_preview) {
             app.tableState.allData = stats.data_preview;
             app.tableState.filteredData = [...stats.data_preview];
+            app.tableState.modifiedCells = stats.modified_cells || [];
             initializeDataTable(stats.data_preview, stats.colonnes);
         }
 
-        // Charger les graphiques
-        loadGraphs(plotPaths);
+        // Charger les graphiques (Différé pour fluidité)
+        setTimeout(() => loadGraphs(plotPaths), 100);
 
         // Setup event listeners du dashboard
         setupDashboardEventListeners();
+
+        // Gérer le hash initial (ex: #data)
+        if (window.location.hash) {
+            scrollToSection(window.location.hash);
+        }
 
         console.log('✅ Dashboard affiché');
     }
@@ -678,6 +726,16 @@
                         <p class="text-sm font-semibold text-white mb-1">${app.currentFilename}</p>
                         <p class="text-xs text-muted-foreground">${s.lignes_finales} lignes × ${s.colonnes_finales} colonnes</p>
                     </div>
+                    
+                    <button id="btn-back-config" class="w-full mb-3 bg-white/5 border border-white/10 text-white h-10 rounded-lg font-semibold hover:bg-white/10 transition-all flex items-center justify-center gap-2">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 20V10"></path>
+                            <path d="M18 20V4"></path>
+                            <path d="M6 20v-4"></path>
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        </svg>
+                        ⚙️ Configurer
+                    </button>
                     
                     <button id="btn-export" class="w-full bg-gradient-to-r from-primary to-secondary text-white h-10 rounded-lg font-semibold hover:shadow-glow transition-all flex items-center justify-center gap-2">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -810,14 +868,12 @@
                                 <button class="density-option" data-density="comfortable">Confortable</button>
                             </div>
                             
-                            <!-- Export sélection -->
-                            <button id="btn-export-selection" class="px-3 py-2 bg-primary/10 border border-primary/20 text-primary rounded-lg hover:bg-primary/20 transition-all text-sm font-medium flex items-center gap-2">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                    <polyline points="7 10 12 15 17 10"></polyline>
-                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                            <!-- Validation des modifications -->
+                            <button id="btn-validate" class="px-3 py-2 bg-green-600/10 border border-green-600/20 text-green-500 rounded-lg hover:bg-green-600/20 transition-all text-sm font-medium flex items-center gap-2">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
                                 </svg>
-                                Exporter sélection
+                                Valider les modifications
                             </button>
                         </div>
                     </div>
@@ -1003,33 +1059,24 @@
 
         app.tableState.displayedData = filteredData.slice(startIndex, endIndex);
 
+        // Optimisation : Lookup O(1) avec un Set
+        const modifiedSet = new Set(app.tableState.modifiedCells.map(m => `${m.row},${m.col}`));
         let html = '';
 
         app.tableState.displayedData.forEach((row, idx) => {
             const globalIdx = startIndex + idx;
             const isSelected = app.tableState.selectedRows.has(globalIdx);
-
             html += `<tr class="${isSelected ? 'selected' : ''}" data-index="${globalIdx}">`;
+            html += `<td><input type="checkbox" class="row-checkbox" data-index="${globalIdx}" ${isSelected ? 'checked' : ''}></td>`;
 
-            // Checkbox
-            html += `
-                <td>
-                    <input type="checkbox" 
-                           class="row-checkbox" 
-                           data-index="${globalIdx}"
-                           ${isSelected ? 'checked' : ''}>
-                </td>
-            `;
-
-            // Données
-            Object.values(row).forEach(value => {
-                const cellClass = getCellClass(value);
+            Object.keys(row).forEach(col => {
+                const value = row[col];
+                const isModified = modifiedSet.has(`${globalIdx},${col}`);
+                const cellClass = getCellClass(value, isModified);
                 html += `<td class="${cellClass}" contenteditable="false">${formatCellValue(value)}</td>`;
             });
-
             html += '</tr>';
         });
-
         tbody.innerHTML = html;
 
         // Event listeners
@@ -1045,20 +1092,106 @@
             });
 
             td.addEventListener('blur', () => {
+                const tr = td.parentElement;
+                const globalIdx = parseInt(tr.dataset.index);
+                const colIndex = td.cellIndex - 1; // -1 car la première colonne est la checkbox
+                const columns = Object.keys(app.tableState.allData[0]);
+                const colName = columns[colIndex];
+
+                let newValue = td.innerText.trim();
+
+                // Tenter de convertir en nombre si possible
+                if (!isNaN(newValue) && newValue !== '') {
+                    newValue = parseFloat(newValue);
+                }
+
+                // Mettre à jour les données locales
+                app.tableState.filteredData[globalIdx][colName] = newValue;
+
                 td.contentEditable = 'false';
                 td.classList.remove('editing');
+
+                // Marquer comme modifié visuellement (optionnel, déjà géré au prochain rendu)
+                td.classList.add('manual-edit');
+                td.classList.add('outlier-value');
+            });
+
+            td.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    td.blur();
+                }
+                if (e.key === 'Escape') {
+                    // Annuler le changement (on pourrait stocker la valeur initiale mais ici on simplifie)
+                    td.innerText = formatCellValue(app.tableState.allData[parseInt(td.parentElement.dataset.index)][Object.keys(app.tableState.allData[0])[td.cellIndex - 1]]);
+                    td.blur();
+                }
             });
         });
     }
 
-    function getCellClass(value) {
+    async function validateManualChanges() {
+        if (!app.tableState.allData || app.tableState.allData.length === 0) {
+            showNotification('⚠️ Aucune donnée à valider', 'warning');
+            return;
+        }
+
+        showLoading('Enregistrement des modifications...');
+
+        try {
+            const response = await fetch('/update_data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ data: app.tableState.allData }),
+                credentials: 'include'
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification('✅ Modifications enregistrées et exports mis à jour !', 'success');
+
+                document.querySelectorAll('.manual-edit').forEach(el => {
+                    el.classList.remove('manual-edit');
+                });
+
+                // Mettre à jour les stats si nécessaire
+                if (result.stats) {
+                    app.finalStats = result.stats;
+                }
+
+                // Mettre à jour le nom du fichier CSV pour l'export
+                if (result.csv_filename) {
+                    app.csvFilename = result.csv_filename;
+                }
+            } else {
+                throw new Error(result.error || 'Erreur lors de la validation');
+            }
+        } catch (error) {
+            console.error('❌ Erreur validation:', error);
+            showNotification('❌ ' + error.message, 'error');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    function getCellClass(value, isModified = false) {
+        let classes = [];
+
         if (value === null || value === undefined || value === '') {
-            return 'null-value';
+            classes.push('null-value');
+        } else if (typeof value === 'number') {
+            classes.push('numeric-value');
         }
-        if (typeof value === 'number') {
-            return 'numeric-value';
+
+        // Appliquer la couleur rouge clair si modifiée (nettoyée)
+        if (isModified) {
+            classes.push('outlier-value');
         }
-        return '';
+
+        return classes.join(' ');
     }
 
     function formatCellValue(value) {
@@ -1341,11 +1474,18 @@
             btnExport.addEventListener('click', showExportMenu);
         }
 
-        // Bouton export sélection
-        const btnExportSelection = document.getElementById('btn-export-selection');
-        if (btnExportSelection) {
-            btnExportSelection.addEventListener('click', exportSelection);
+        // Bouton retour configuration
+        const btnBackConfig = document.getElementById('btn-back-config');
+        if (btnBackConfig) {
+            btnBackConfig.addEventListener('click', () => {
+                if (app.initialStats) {
+                    showConfigView(app.initialStats);
+                } else {
+                    showNotification('⚠️ Statistiques initiales non disponibles', 'warning');
+                }
+            });
         }
+
 
         // Recherche globale
         const tableSearch = document.getElementById('table-search');
@@ -1357,6 +1497,83 @@
         document.querySelectorAll('.density-option').forEach(btn => {
             btn.addEventListener('click', () => handleDensityChange(btn.dataset.density));
         });
+
+        // Bouton valider les modifications
+        const btnValidate = document.getElementById('btn-validate');
+        if (btnValidate) {
+            btnValidate.addEventListener('click', validateManualChanges);
+        }
+
+        // Navigation par ancres (Sidebar)
+        document.querySelectorAll('.sidebar-nav-item').forEach(link => {
+            link.addEventListener('click', function (e) {
+                const href = this.getAttribute('href');
+                if (href && href.startsWith('#')) {
+                    e.preventDefault();
+                    scrollToSection(href);
+                }
+            });
+        });
+
+        // Scroll spy pour mettre à jour l'item actif
+        const dashboardView = document.getElementById('view-dashboard');
+        if (dashboardView) {
+            dashboardView.addEventListener('scroll', throttle(handleScrollSpy, 100));
+        }
+    }
+
+    function scrollToSection(hash) {
+        const id = hash.substring(1); // Enlever le #
+
+        // Mapper les ancres vers les IDs de sections réels
+        const sectionMap = {
+            'overview': 'view-dashboard', // Haut de page
+            'data': 'data-section',
+            'charts': 'charts-section',
+            'stats': 'stats-section'
+        };
+
+        const targetId = sectionMap[id] || id;
+        const targetElement = document.getElementById(targetId);
+
+        if (targetElement) {
+            targetElement.scrollIntoView({ behavior: 'smooth' });
+
+            // Mettre à jour l'URL sans recharger
+            history.pushState(null, null, hash);
+
+            // Mettre à jour la classe active
+            updateActiveSidebarItem(hash);
+        }
+    }
+
+    function updateActiveSidebarItem(hash) {
+        document.querySelectorAll('.sidebar-nav-item').forEach(item => {
+            const itemHash = item.getAttribute('href');
+            item.classList.toggle('active', itemHash === hash);
+        });
+    }
+
+    function handleScrollSpy() {
+        if (app.currentView !== 'dashboard') return;
+
+        const sections = [
+            { id: '#stats', element: document.getElementById('stats-section') },
+            { id: '#charts', element: document.getElementById('charts-section') },
+            { id: '#data', element: document.getElementById('data-section') },
+            { id: '#overview', element: document.getElementById('view-dashboard') }
+        ];
+
+        for (const section of sections) {
+            if (section.element) {
+                const rect = section.element.getBoundingClientRect();
+                // Si le haut de la section est proche du haut de la fenêtre
+                if (rect.top >= 0 && rect.top <= 200) {
+                    updateActiveSidebarItem(section.id);
+                    break;
+                }
+            }
+        }
     }
 
     function handleGlobalSearch(e) {
@@ -1504,27 +1721,6 @@
         showNotification(`📥 Téléchargement de ${filename}...`, 'info');
     };
 
-    function exportSelection() {
-        if (app.tableState.selectedRows.size === 0) {
-            showNotification('⚠️ Aucune ligne sélectionnée', 'warning');
-            return;
-        }
-
-        const selectedData = Array.from(app.tableState.selectedRows)
-            .map(idx => app.tableState.allData[idx]);
-
-        // Convertir en CSV
-        const csv = Papa.unparse(selectedData);
-
-        // Télécharger
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `selection_${Date.now()}.csv`;
-        link.click();
-
-        showNotification(`✅ ${selectedData.length} ligne(s) exportée(s)`, 'success');
-    }
 
     // ========================================
     // NAVIGATION ENTRE VUES
@@ -1537,9 +1733,20 @@
             const element = document.getElementById(`view-${v}`);
             if (element) {
                 if (v === viewName) {
-                    element.classList.remove('hidden', 'hidden-view');
+                    if (v === 'config') {
+                        // Pour config, on ne cache pas forcément les autres car c'est un modal désormas
+                        // Mais showConfigView gère déjà l'affichage, donc on peut ignorer ici ou adapter
+                        element.classList.remove('hidden');
+                    } else {
+                        element.classList.remove('hidden', 'hidden-view');
+                    }
                 } else {
-                    element.classList.add('hidden-view');
+                    // Si on passe à upload ou dashboard, on s'assure que le modal config est fermé
+                    if (v === 'config') {
+                        element.classList.add('hidden');
+                    } else {
+                        element.classList.add('hidden-view');
+                    }
                 }
             }
         });
@@ -1616,23 +1823,5 @@
     // ========================================
     // UTILITAIRES
     // ========================================
-
-    function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-
-    // ========================================
-    // FIN DU FICHIER
-    // ========================================
-
-    console.log('✅ dashboard.js chargé (v3.0)');
 
 })();

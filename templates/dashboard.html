@@ -189,218 +189,244 @@ outliers IQR, valeurs manquantes et doublons.{% endblock %}
     </section>
 
     <!-- ============================================ -->
-    <!-- VUE 2: CONFIGURATION -->
+    <!-- VUE 2: CONFIGURATION (MODAL) -->
     <!-- ============================================ -->
-    <section id="view-config" class="hidden min-h-screen py-24">
-        <div class="container mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl">
+    <div id="view-config" class="hidden fixed inset-0 z-[9999] flex items-center justify-center p-4">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="hideConfigModal()"></div>
 
-            <!-- Bouton retour -->
-            <button id="btn-back-upload"
-                class="flex items-center gap-2 text-muted-foreground hover:text-white transition-colors mb-8 group">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    class="group-hover:-translate-x-1 transition-transform">
-                    <line x1="19" y1="12" x2="5" y2="12"></line>
-                    <polyline points="12 19 5 12 12 5"></polyline>
-                </svg>
-                Retour à l'upload
-            </button>
+        <!-- Modal Content -->
+        <div
+            class="relative bg-slate-900 border border-white/10 w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl animate-zoom-in">
+            <div class="p-8 md:p-12">
+                <!-- Bouton fermer -->
+                <button onclick="hideConfigModal()"
+                    class="absolute top-6 right-6 p-2 text-muted-foreground hover:text-white hover:bg-white/10 rounded-full transition-all">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
 
-            <!-- Header -->
-            <div class="mb-10">
-                <h2 class="text-4xl font-black text-white mb-3">
-                    ⚙️ Configuration du nettoyage
-                </h2>
-                <p class="text-muted-foreground text-lg">Choisissez les options adaptées à vos données</p>
-            </div>
+                <!-- Bouton retour (Masqué car remplacé par la croix, ou gardé pour navigation explicite) -->
+                <button id="btn-back-upload"
+                    class="hidden items-center gap-2 text-muted-foreground hover:text-white transition-colors mb-8 group">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        class="group-hover:-translate-x-1 transition-transform">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                    Retour à l'upload
+                </button>
 
-            <!-- Info fichier -->
-            <div id="config-file-info" class="bg-card border border-white/10 rounded-2xl p-6 mb-8 animate-fade-in">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-4">
-                        <div
-                            class="w-14 h-14 bg-gradient-to-br from-primary to-secondary rounded-xl flex items-center justify-center flex-shrink-0 shadow-glow">
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
+                <!-- Header -->
+                <div class="mb-10">
+                    <h2 class="text-4xl font-black text-white mb-3">
+                        ⚙️ Configuration du nettoyage
+                    </h2>
+                    <p class="text-muted-foreground text-lg">Choisissez les options adaptées à vos données</p>
+                </div>
+
+                <!-- Info fichier -->
+                <div id="config-file-info" class="bg-card border border-white/10 rounded-2xl p-6 mb-8 animate-fade-in">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <div
+                                class="w-14 h-14 bg-gradient-to-br from-primary to-secondary rounded-xl flex items-center justify-center flex-shrink-0 shadow-glow">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white"
+                                    stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                </svg>
+                            </div>
+                            <div>
+                                <p id="config-filename" class="text-xl font-bold text-white"></p>
+                                <p id="config-filesize" class="text-sm text-muted-foreground mt-1"></p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-4xl font-black text-primary" id="config-rows">0</p>
+                            <p class="text-sm text-muted-foreground">lignes détectées</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPI Cards -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+
+                    <div class="bg-card border border-white/10 rounded-2xl p-5 hover:border-blue-500/30 transition-all">
+                        <div class="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center mb-3">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B82F6"
+                                stroke-width="2">
+                                <rect x="3" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="14" width="7" height="7"></rect>
+                                <rect x="3" y="14" width="7" height="7"></rect>
                             </svg>
                         </div>
-                        <div>
-                            <p id="config-filename" class="text-xl font-bold text-white"></p>
-                            <p id="config-filesize" class="text-sm text-muted-foreground mt-1"></p>
-                        </div>
+                        <p class="text-3xl font-black text-white mb-1" id="kpi-rows">0</p>
+                        <p class="text-xs text-muted-foreground">Lignes totales</p>
                     </div>
-                    <div class="text-right">
-                        <p class="text-4xl font-black text-primary" id="config-rows">0</p>
-                        <p class="text-sm text-muted-foreground">lignes détectées</p>
-                    </div>
-                </div>
-            </div>
 
-            <!-- KPI Cards -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-
-                <div class="bg-card border border-white/10 rounded-2xl p-5 hover:border-blue-500/30 transition-all">
-                    <div class="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center mb-3">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="7"></rect>
-                            <rect x="14" y="3" width="7" height="7"></rect>
-                            <rect x="14" y="14" width="7" height="7"></rect>
-                            <rect x="3" y="14" width="7" height="7"></rect>
-                        </svg>
-                    </div>
-                    <p class="text-3xl font-black text-white mb-1" id="kpi-rows">0</p>
-                    <p class="text-xs text-muted-foreground">Lignes totales</p>
-                </div>
-
-                <div class="bg-card border border-white/10 rounded-2xl p-5 hover:border-orange-500/30 transition-all">
-                    <div class="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center mb-3">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F97316" stroke-width="2">
-                            <path
-                                d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
-                            </path>
-                            <line x1="12" y1="9" x2="12" y2="13"></line>
-                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                        </svg>
-                    </div>
-                    <p class="text-3xl font-black text-orange-400 mb-1" id="kpi-missing">0</p>
-                    <p class="text-xs text-muted-foreground">Val. manquantes</p>
-                </div>
-
-                <div class="bg-card border border-white/10 rounded-2xl p-5 hover:border-red-500/30 transition-all">
-                    <div class="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center mb-3">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" y1="8" x2="12" y2="12"></line>
-                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                        </svg>
-                    </div>
-                    <p class="text-3xl font-black text-red-400 mb-1" id="kpi-outliers">0</p>
-                    <p class="text-xs text-muted-foreground">Outliers (IQR)</p>
-                </div>
-
-                <div class="bg-card border border-white/10 rounded-2xl p-5 hover:border-yellow-500/30 transition-all">
-                    <div class="w-10 h-10 bg-yellow-500/20 rounded-xl flex items-center justify-center mb-3">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EAB308" stroke-width="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                            <line x1="9" y1="9" x2="15" y2="15"></line>
-                            <line x1="15" y1="9" x2="9" y2="15"></line>
-                        </svg>
-                    </div>
-                    <p class="text-3xl font-black text-yellow-400 mb-1" id="kpi-duplicates">0</p>
-                    <p class="text-xs text-muted-foreground">Doublons</p>
-                </div>
-            </div>
-
-            <!-- Options de nettoyage -->
-            <div class="space-y-6 mb-10">
-
-                <!-- Valeurs manquantes -->
-                <div class="bg-card border border-white/10 rounded-2xl p-6 hover:border-orange-500/20 transition-all">
-                    <div class="flex items-start gap-4 mb-5">
-                        <div
-                            class="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#F97316"
+                    <div
+                        class="bg-card border border-white/10 rounded-2xl p-5 hover:border-orange-500/30 transition-all">
+                        <div class="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center mb-3">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F97316"
                                 stroke-width="2">
                                 <path
                                     d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
                                 </path>
+                                <line x1="12" y1="9" x2="12" y2="13"></line>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
                             </svg>
                         </div>
-                        <div>
-                            <h3 class="font-bold text-white text-lg mb-1">Valeurs manquantes (NaN)</h3>
-                            <p class="text-sm text-muted-foreground">Stratégie de traitement des cellules vides</p>
-                        </div>
+                        <p class="text-3xl font-black text-orange-400 mb-1" id="kpi-missing">0</p>
+                        <p class="text-xs text-muted-foreground">Val. manquantes</p>
                     </div>
-                    <select id="missing-strategy"
-                        class="w-full bg-background border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all cursor-pointer appearance-none">
-                        <option value="auto">🤖 Automatique — Médiane (numérique) / Mode (texte)</option>
-                        <option value="median">📊 Médiane — Pour colonnes numériques</option>
-                        <option value="mean">📈 Moyenne — Pour colonnes numériques</option>
-                        <option value="mode">🎯 Mode — Valeur la plus fréquente</option>
-                        <option value="drop">🗑️ Supprimer — Retirer les lignes incomplètes</option>
-                    </select>
-                </div>
 
-                <!-- Outliers -->
-                <div class="bg-card border border-white/10 rounded-2xl p-6 hover:border-red-500/20 transition-all">
-                    <div class="flex items-start gap-4 mb-5">
-                        <div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#EF4444"
+                    <div class="bg-card border border-white/10 rounded-2xl p-5 hover:border-red-500/30 transition-all">
+                        <div class="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center mb-3">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EF4444"
                                 stroke-width="2">
                                 <circle cx="12" cy="12" r="10"></circle>
                                 <line x1="12" y1="8" x2="12" y2="12"></line>
                                 <line x1="12" y1="16" x2="12.01" y2="16"></line>
                             </svg>
                         </div>
-                        <div>
-                            <h3 class="font-bold text-white text-lg mb-1">Valeurs aberrantes — Méthode IQR</h3>
-                            <p class="text-sm text-muted-foreground">Détection via Interquartile Range (Q1 - 1.5×IQR, Q3
-                                + 1.5×IQR)</p>
-                        </div>
+                        <p class="text-3xl font-black text-red-400 mb-1" id="kpi-outliers">0</p>
+                        <p class="text-xs text-muted-foreground">Outliers (IQR)</p>
                     </div>
-                    <select id="outliers-method"
-                        class="w-full bg-background border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all cursor-pointer appearance-none">
-                        <option value="cap">✂️ Capping — Limiter aux bornes IQR (recommandé)</option>
-                        <option value="median">📊 Remplacer par la médiane</option>
-                        <option value="remove">🗑️ Supprimer les lignes avec outliers</option>
-                    </select>
+
+                    <div
+                        class="bg-card border border-white/10 rounded-2xl p-5 hover:border-yellow-500/30 transition-all">
+                        <div class="w-10 h-10 bg-yellow-500/20 rounded-xl flex items-center justify-center mb-3">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EAB308"
+                                stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="9" y1="9" x2="15" y2="15"></line>
+                                <line x1="15" y1="9" x2="9" y2="15"></line>
+                            </svg>
+                        </div>
+                        <p class="text-3xl font-black text-yellow-400 mb-1" id="kpi-duplicates">0</p>
+                        <p class="text-xs text-muted-foreground">Doublons</p>
+                    </div>
                 </div>
 
-                <!-- Doublons -->
-                <div class="bg-card border border-white/10 rounded-2xl p-6 hover:border-yellow-500/20 transition-all">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-4">
+                <!-- Options de nettoyage -->
+                <div class="space-y-6 mb-10">
+
+                    <!-- Valeurs manquantes -->
+                    <div
+                        class="bg-card border border-white/10 rounded-2xl p-6 hover:border-orange-500/20 transition-all">
+                        <div class="flex items-start gap-4 mb-5">
                             <div
-                                class="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#EAB308"
+                                class="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#F97316"
                                     stroke-width="2">
-                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                                    <line x1="9" y1="9" x2="15" y2="15"></line>
-                                    <line x1="15" y1="9" x2="9" y2="15"></line>
+                                    <path
+                                        d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
+                                    </path>
                                 </svg>
                             </div>
                             <div>
-                                <h3 class="font-bold text-white text-lg mb-1">Supprimer les doublons</h3>
-                                <p class="text-sm text-muted-foreground">Garder uniquement la première occurrence de
-                                    chaque doublon</p>
+                                <h3 class="font-bold text-white text-lg mb-1">Valeurs manquantes (NaN)</h3>
+                                <p class="text-sm text-muted-foreground">Stratégie de traitement des cellules vides</p>
                             </div>
                         </div>
-                        <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                            <input type="checkbox" id="remove-duplicates" class="sr-only peer" checked>
+                        <select id="missing-strategy"
+                            class="w-full bg-background border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all cursor-pointer appearance-none">
+                            <option value="auto">🤖 Automatique — Médiane (numérique) / Mode (texte)</option>
+                            <option value="median">📊 Médiane — Pour colonnes numériques</option>
+                            <option value="mean">📈 Moyenne — Pour colonnes numériques</option>
+                            <option value="mode">🎯 Mode — Valeur la plus fréquente</option>
+                            <option value="drop">🗑️ Supprimer — Retirer les lignes incomplètes</option>
+                        </select>
+                    </div>
+
+                    <!-- Outliers -->
+                    <div class="bg-card border border-white/10 rounded-2xl p-6 hover:border-red-500/20 transition-all">
+                        <div class="flex items-start gap-4 mb-5">
                             <div
-                                class="w-14 h-7 bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary">
+                                class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#EF4444"
+                                    stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                </svg>
                             </div>
-                        </label>
+                            <div>
+                                <h3 class="font-bold text-white text-lg mb-1">Valeurs aberrantes — Méthode IQR</h3>
+                                <p class="text-sm text-muted-foreground">Détection via Interquartile Range (Q1 -
+                                    1.5×IQR, Q3
+                                    + 1.5×IQR)</p>
+                            </div>
+                        </div>
+                        <select id="outliers-method"
+                            class="w-full bg-background border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all cursor-pointer appearance-none">
+                            <option value="cap">✂️ Capping — Limiter aux bornes IQR (recommandé)</option>
+                            <option value="median">📊 Remplacer par la médiane</option>
+                            <option value="remove">🗑️ Supprimer les lignes avec outliers</option>
+                        </select>
+                    </div>
+
+                    <!-- Doublons -->
+                    <div
+                        class="bg-card border border-white/10 rounded-2xl p-6 hover:border-yellow-500/20 transition-all">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-4">
+                                <div
+                                    class="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#EAB308"
+                                        stroke-width="2">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="9" y1="9" x2="15" y2="15"></line>
+                                        <line x1="15" y1="9" x2="9" y2="15"></line>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-white text-lg mb-1">Supprimer les doublons</h3>
+                                    <p class="text-sm text-muted-foreground">Garder uniquement la première occurrence de
+                                        chaque doublon</p>
+                                </div>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                                <input type="checkbox" id="remove-duplicates" class="sr-only peer" checked>
+                                <div
+                                    class="w-14 h-7 bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary">
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bouton Nettoyer -->
+                <button id="btn-clean"
+                    class="w-full bg-gradient-to-r from-primary to-secondary text-white h-16 rounded-2xl font-black text-xl hover:shadow-glow hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-3 shadow-card">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+                        <path d="M12 2L13.5 8.5L18 10L13.5 11.5L12 18L10.5 11.5L6 10L10.5 8.5L12 2Z" />
+                    </svg>
+                    🧹 Nettoyer les données maintenant
+                </button>
+
+                <!-- Note auth -->
+                <div id="auth-note" class="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                    <div class="flex items-start gap-3">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2"
+                            class="flex-shrink-0 mt-0.5">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        <p class="text-sm text-blue-400">
+                            <strong>Note :</strong> Une connexion Google est requise pour le nettoyage.
+                            Vos données sont sauvegardées avant la redirection et reprises automatiquement.
+                        </p>
                     </div>
                 </div>
             </div>
-
-            <!-- Bouton Nettoyer -->
-            <button id="btn-clean"
-                class="w-full bg-gradient-to-r from-primary to-secondary text-white h-16 rounded-2xl font-black text-xl hover:shadow-glow hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-3 shadow-card">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
-                    <path d="M12 2L13.5 8.5L18 10L13.5 11.5L12 18L10.5 11.5L6 10L10.5 8.5L12 2Z" />
-                </svg>
-                🧹 Nettoyer les données maintenant
-            </button>
-
-            <!-- Note auth -->
-            <div id="auth-note" class="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-                <div class="flex items-start gap-3">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2"
-                        class="flex-shrink-0 mt-0.5">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="12" y1="8" x2="12" y2="12"></line>
-                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                    </svg>
-                    <p class="text-sm text-blue-400">
-                        <strong>Note :</strong> Une connexion Google est requise pour le nettoyage.
-                        Vos données sont sauvegardées avant la redirection et reprises automatiquement.
-                    </p>
-                </div>
-            </div>
         </div>
-    </section>
+    </div>
 
     <!-- ============================================ -->
     <!-- VUE 3: DASHBOARD RÉSULTATS -->

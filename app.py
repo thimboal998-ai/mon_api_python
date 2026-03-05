@@ -143,6 +143,9 @@ class NpEncoder(json.JSONEncoder):
         if isinstance(obj, np.integer):
             return int(obj)
         if isinstance(obj, np.floating):
+            # Vérifier si c'est un NaN numpy
+            if np.isnan(obj):
+                return None
             return float(obj)
         if isinstance(obj, np.ndarray):
             return obj.tolist()
@@ -295,12 +298,15 @@ def read_file(filepath):
         
         if extension == 'csv':
             print(f"\n📖 Lecture CSV : {filepath}")
-            df = pd.read_csv(filepath)
+            # Liste étendue de valeurs manquantes communes
+            na_values = ['NA', 'n/a', 'na', '--', 'null', 'None', '', ' ']
+            df = pd.read_csv(filepath, na_values=na_values)
             print(f"   Lignes : {len(df)}, Colonnes brutes : {len(df.columns)}")
             
         elif extension in ['xlsx', 'xls']:
             print(f"\n📖 Lecture Excel : {filepath}")
-            df = pd.read_excel(filepath)
+            na_values = ['NA', 'n/a', 'na', '--', 'null', 'None', '', ' ']
+            df = pd.read_excel(filepath, na_values=na_values)
             print(f"   Lignes : {len(df)}, Colonnes brutes : {len(df.columns)}")
             
         elif extension == 'json':
@@ -796,6 +802,84 @@ def clean_data():
     
     except Exception as e:
         print(f"❌ Erreur nettoyage : {str(e)}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================
+# ROUTES - MODIFICATIONS MANUELLES
+# ============================================
+
+@app.route('/update_data', methods=['POST'])
+@login_required
+def update_data():
+    """
+    Met à jour le DataFrame avec les modifications manuelles de l'utilisateur
+    """
+    global current_processor, current_filename
+    
+    if not current_processor:
+        return jsonify({'success': False, 'error': 'Aucun processeur actif'}), 400
+        
+    try:
+        data = request.json.get('data')
+        if not data:
+            return jsonify({'success': False, 'error': 'Données manquantes'}), 400
+            
+        # Convertir les données JSON en DataFrame
+        new_preview_df = pd.DataFrame(data)
+        
+        # S'assurer que le DataFrame actuel existe
+        if current_processor.df is None:
+            return jsonify({'success': False, 'error': 'DataFrame inexistant'}), 400
+            
+        # Nombre de lignes à mettre à jour (maximum 100 généralement)
+        num_rows_to_update = len(new_preview_df)
+        
+        # Vérifier que les colonnes correspondent
+        if list(new_preview_df.columns) != list(current_processor.df.columns):
+            # Tenter de réordonner les colonnes si elles sont juste dans un ordre différent
+            try:
+                new_preview_df = new_preview_df[current_processor.df.columns]
+            except:
+                return jsonify({'success': False, 'error': 'Les colonnes ne correspondent pas'}), 400
+
+        # Mettre à jour les N premières lignes du DataFrame original
+        # On utilise .iloc pour cibler les positions exactes
+        current_processor.df.iloc[0:num_rows_to_update] = new_preview_df.values
+        
+        # Recalculer les stats et la qualité après modification manuelle
+        current_processor.calculate_quality_score()
+        
+        # Déterminer le nom du fichier CSV (doit correspondre à celui utilisé dans clean_data)
+        # On essaie de retrouver le nom généré lors du dernier nettoyage
+        csv_filename = f"cleaned_{os.path.splitext(current_filename)[0]}.csv"
+        csv_path = os.path.join(app.config['PROCESSED_FOLDER'], csv_filename)
+        
+        # Exporter à nouveau le CSV pour que les téléchargements soient à jour
+        current_processor.export_to_csv(csv_path)
+        
+        print(f"✅ Données mises à jour manuellement pour {current_filename}")
+        
+        # Préparer les stats pour le front-end (en nettoyant les NaN)
+        final_stats = current_processor.get_final_stats()
+        
+        # Préparer la réponse
+        response_data = {
+            'success': True,
+            'message': 'Données mises à jour avec succès',
+            'stats': final_stats,
+            'csv_filename': csv_filename
+        }
+        
+        return app.response_class(
+            response=json.dumps(response_data, cls=NpEncoder),
+            status=200,
+            mimetype='application/json'
+        )
+        
+    except Exception as e:
+        print(f"❌ Erreur mise à jour données : {str(e)}")
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 

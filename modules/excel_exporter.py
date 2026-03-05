@@ -168,6 +168,11 @@ class ExcelExporter:
                     cell.alignment = self.styles['number']['alignment']
                     cell.number_format = self.styles['number']['number_format']
                 else:
+                    # Gérer les types complexes (listes, dicts) qui font planter openpyxl
+                    if isinstance(value, (list, dict)):
+                        value = str(value)
+                    
+                    cell.value = value
                     cell.font = self.styles['cell']['font']
                     cell.alignment = self.styles['cell']['alignment']
                 

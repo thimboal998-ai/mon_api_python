@@ -49,6 +49,9 @@ class DataProcessor:
             # Nettoyer les colonnes index automatiquement
             self._clean_index_columns()
             
+            # Forcer la détection des types numériques (coercion des erreurs en NaN)
+            self._coerce_numeric_columns()
+            
             # Reset index pour sécurité
             self.df = self.df.reset_index(drop=True)
             self.df_original = self.df_original.copy()
@@ -84,6 +87,9 @@ class DataProcessor:
             self.plot_paths = []
             self.plots_dir = 'static/plots'
             os.makedirs(self.plots_dir, exist_ok=True)
+            
+            # Suivi des modifications par cellule (index, colonne)
+            self.modified_cells = set()
             
             print("\n" + "="*70)
             
@@ -153,6 +159,28 @@ class DataProcessor:
             print(f"   ✅ {len(cols_to_drop)} colonne(s) supprimée(s)")
         else:
             print("   ✅ Aucune colonne index détectée")
+            
+    def _coerce_numeric_columns(self):
+        """
+        Tente de convertir les colonnes 'object' qui sont majoritairement numériques
+        en float64, en transformant les erreurs (ex: texte) en NaN.
+        """
+        print("\n🔍 Analyse des types de colonnes...")
+        
+        for col in self.df.columns:
+            if self.df[col].dtype == 'object':
+                # Tester si la colonne peut être numérique (au moins 50% de chiffres)
+                # On nettoie les espaces et on tente la conversion
+                s_clean = self.df[col].astype(str).str.strip().replace(['nan', 'None', 'null'], np.nan)
+                
+                # Compter combien de valeurs sont "numériques-like"
+                numeric_count = pd.to_numeric(s_clean, errors='coerce').notnull().sum()
+                non_null_count = s_clean.notnull().sum()
+                
+                if non_null_count > 0 and (numeric_count / non_null_count) > 0.5:
+                    print(f"   🔄 Conversion de '{col}' en type numérique (Coercion)...")
+                    self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
+                    self.df_original[col] = pd.to_numeric(self.df_original[col], errors='coerce')
     def _clean_nan_values(self, obj):
         """
     Remplace récursivement NaN et Infinity par None
@@ -230,7 +258,8 @@ class DataProcessor:
             
             # 4. Aperçu des données (SANS INDEX)
             try:
-                data_preview = self.df.head(100).reset_index(drop=True).to_dict('records')
+                data_preview_raw = self.df.head(100).reset_index(drop=True).to_dict('records')
+                data_preview = self._clean_nan_values(data_preview_raw)
             except:
                 data_preview = []
             
@@ -255,7 +284,7 @@ class DataProcessor:
                 'data_preview': data_preview
             }
             
-            return result
+            return self._clean_nan_values(result)
             
         except Exception as e:
             print(f"❌ Erreur get_initial_stats : {str(e)}")
@@ -299,27 +328,40 @@ class DataProcessor:
                 valeurs_traitees = 0
                 for col in self.df.columns:
                     missing_count = self.df[col].isnull().sum()
-                    
                     if missing_count == 0:
                         continue
                     
                     try:
-                        if self.df[col].dtype in ['int64', 'float64']:
-                            if strategy in ['auto', 'median']:
-                                val = self.df[col].median()
-                                self.df[col] = self.df[col].fillna(val)
-                            elif strategy == 'mean':
-                                val = self.df[col].mean()
-                                self.df[col] = self.df[col].fillna(val)
-                        else:
-                            if strategy in ['auto', 'mode']:
-                                mode_val = self.df[col].mode()
-                                val = mode_val[0] if not mode_val.empty else "Inconnu"
-                                self.df[col] = self.df[col].fillna(val)
+                        # Déterminer la valeur de remplissage selon la stratégie et le type
+                        val = None
+                        is_numeric = pd.api.types.is_numeric_dtype(self.df[col])
                         
+                        if strategy == 'mean' and is_numeric:
+                            val = self.df[col].mean()
+                        elif strategy == 'median' and is_numeric:
+                            val = self.df[col].median()
+                        elif strategy == 'mode' or strategy == 'auto':
+                            mode_res = self.df[col].mode()
+                            val = mode_res[0] if not mode_res.empty else None
+                        
+                        # Fallback si val est toujours None (ex: mediane sur texte ou mode vide)
+                        if val is None:
+                            if is_numeric:
+                                val = self.df[col].median() if strategy != 'mean' else self.df[col].mean()
+                            else:
+                                mode_res = self.df[col].mode()
+                                val = mode_res[0] if not mode_res.empty else "Inconnu"
+
+                        # Appliquer le remplissage
+                        missing_indices = self.df[self.df[col].isnull()].index.tolist()
+                        for idx in missing_indices:
+                            self.modified_cells.add((idx, col))
+                        
+                        self.df[col] = self.df[col].fillna(val)
                         valeurs_traitees += missing_count
                         
                     except Exception as e:
+                        print(f"   ⚠️ Erreur sur colonne '{col}': {str(e)}")
                         continue
             
             self.stats['valeurs_manquantes_traitees'] = valeurs_traitees
@@ -394,6 +436,11 @@ class DataProcessor:
                     if count == 0:
                         continue
                     
+                    # Enregistrer les modifications
+                    outlier_indices = self.df[mask].index.tolist()
+                    for idx in outlier_indices:
+                        self.modified_cells.add((idx, col))
+                        
                     if method == 'cap':
                         self.df[col] = self.df[col].clip(lower=lower, upper=upper)
                     elif method == 'median':
@@ -405,7 +452,8 @@ class DataProcessor:
             
             if method == 'remove':
                 len_before = len(self.df)
-                self.df = self.df.drop(list(lignes_avec_outliers))
+                # Utiliser errors='ignore' au cas où certaines lignes auraient été supprimées par handle_missing_values
+                self.df = self.df.drop(list(lignes_avec_outliers), errors='ignore')
                 len_after = len(self.df)
                 lignes_supprimees = len_before - len_after
                 self.stats['lignes_outliers_traitees'] = lignes_supprimees
@@ -585,10 +633,9 @@ class DataProcessor:
             )
             
             total_fixed = (
-                (self.stats['valeurs_manquantes_traitees'] if self.stats['valeurs_manquantes_traitees'] > 0
-                 else self.stats['lignes_avec_valeurs_manquantes']) +
-                self.stats['lignes_outliers_traitees'] +
-                self.stats['doublons_supprimes']
+                self.stats.get('valeurs_manquantes_traitees', 0) +
+                self.stats.get('lignes_outliers_traitees', 0) +
+                self.stats.get('doublons_supprimes', 0)
             )
             
             if total_issues == 0:
@@ -646,15 +693,26 @@ class DataProcessor:
             except:
                 data_preview = []
             
-            return {
+            # Préparer le masque des modifications (nécessite de mapper l'index actuel au preview)
+            # Puisque le preview est head(100) avec reset_index(drop=True), 
+            # on doit filtrer modified_cells pour les 100 premières lignes AFFICHÉES
+            current_index_list = self.df.head(100).index.tolist()
+            api_modified_cells = []
+            for i, idx in enumerate(current_index_list):
+                for col in self.df.columns:
+                    if (idx, col) in self.modified_cells:
+                        api_modified_cells.append({'row': i, 'col': col})
+
+            return self._clean_nan_values({
                 'stats': self.stats,
                 'quality': quality,
                 'descriptive_stats': descriptive_stats,
                 'data_preview': data_preview,
+                'modified_cells': api_modified_cells,
                 'transformation_history': self.transformation_history,
                 'plot_paths': self.plot_paths,
                 'colonnes': list(self.df.columns)
-            }
+            })
             
         except Exception as e:
             print(f"❌ Erreur get_final_stats : {str(e)}")
