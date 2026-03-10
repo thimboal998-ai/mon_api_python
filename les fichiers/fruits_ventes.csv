@@ -1,0 +1,17 @@
+Jour,Fruit,Prix_kg,Quantite_kg,Vendeur
+Lundi,Pomme,2.5,10,Marie
+Lundi,Banane,1.8,15,Pierre
+Lundi,Orange,3.0,8,Marie
+Mardi,Pomme,2.5,12,Pierre
+Mardi,Banane,1.8,18,Marie
+Mardi,Orange,3.0,6,Pierre
+Mercredi,Pomme,2.5,9,Marie
+Mercredi,Banane,1.8,20,Pierre
+Mercredi,Orange,3.0,10,Marie
+Jeudi,Pomme,2.5,11,Pierre
+Jeudi,Banane,1.8,16,Marie
+Jeudi,Orange,3.0,7,Pierre
+Vendredi,Pomme,2.5,14,Marie
+Vendredi,Banane,1.8,22,Pierre
+Vendredi,Orange,3.0,9,Marie
+Samedi,Fraise,8.5,25,Pierre

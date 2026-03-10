@@ -341,16 +341,23 @@ class DataProcessor:
                         elif strategy == 'median' and is_numeric:
                             val = self.df[col].median()
                         elif strategy == 'mode' or strategy == 'auto':
-                            mode_res = self.df[col].mode()
-                            val = mode_res[0] if not mode_res.empty else None
+                            if is_numeric:
+                                # Pour les numériques : mode ou médiane
+                                mode_res = self.df[col].mode()
+                                val = mode_res[0] if not mode_res.empty else self.df[col].median()
+                            else:
+                                # 🛡️ Pour les colonnes texte/catégorielles : utiliser 'Inconnu'
+                                # au lieu du mode global qui peut être hors contexte
+                                # (ex: remplir State_Abbr manquant avec la valeur la + fréquente
+                                # du dataset entier donnerait un mauvais état)
+                                val = "Inconnu"
                         
-                        # Fallback si val est toujours None (ex: mediane sur texte ou mode vide)
+                        # Fallback si val est toujours None
                         if val is None:
                             if is_numeric:
                                 val = self.df[col].median() if strategy != 'mean' else self.df[col].mean()
                             else:
-                                mode_res = self.df[col].mode()
-                                val = mode_res[0] if not mode_res.empty else "Inconnu"
+                                val = "Inconnu"
 
                         # Appliquer le remplissage
                         missing_indices = self.df[self.df[col].isnull()].index.tolist()
@@ -402,6 +409,18 @@ class DataProcessor:
                     Q1 = non_nan.quantile(0.25)
                     Q3 = non_nan.quantile(0.75)
                     IQR = Q3 - Q1
+                    median_col = non_nan.median()
+                    
+                    # 🛡️ CV ROBUSTE = IQR / médiane (insensible aux extrêmes).
+                    # Permet de détecter les distributions naturellement très étalées
+                    # (comptages de votes, populations) sans être trompé par les outliers eux-mêmes.
+                    # Un CV robuste > 0.6 indique une dispersion naturellement très large
+                    # où chaque valeur est légitime (pas un outlier de mesure).
+                    if median_col != 0:
+                        rcv = IQR / abs(median_col)
+                        if rcv > 0.6:
+                            print(f"   ⏭️ Colonne '{col}' ignorée (dispersion naturelle élevée, rCV={rcv:.2f})")
+                            continue
                     
                     lower = Q1 - 1.5 * IQR
                     upper = Q3 + 1.5 * IQR
@@ -426,6 +445,13 @@ class DataProcessor:
                     Q1 = non_nan.quantile(0.25)
                     Q3 = non_nan.quantile(0.75)
                     IQR = Q3 - Q1
+                    median_col = non_nan.median()
+                    
+                    # 🛡️ Même vérification rCV robuste que dans la phase de détection
+                    if median_col != 0:
+                        rcv = IQR / abs(median_col)
+                        if rcv > 0.6:
+                            continue
                     
                     lower = Q1 - 1.5 * IQR
                     upper = Q3 + 1.5 * IQR
@@ -440,11 +466,15 @@ class DataProcessor:
                     outlier_indices = self.df[mask].index.tolist()
                     for idx in outlier_indices:
                         self.modified_cells.add((idx, col))
-                        
+
                     if method == 'cap':
-                        self.df[col] = self.df[col].clip(lower=lower, upper=upper)
+                        # ✅ Remplacer l'outlier par la médiane robuste (sans les outliers)
+                        # pour éviter de plafonner à une valeur IQR hors du domaine réel
+                        median_val = round(float(self.df.loc[~mask, col].median()), 2)
+                        self.df.loc[mask, col] = median_val
+                        print(f"   🔧 '{col}' : {count} outlier(s) remplacé(s) par la médiane ({median_val})")
                     elif method == 'median':
-                        median_val = self.df[col].median()
+                        median_val = round(float(self.df[col].median()), 2)
                         self.df.loc[mask, col] = median_val
                     
                 except Exception as e:

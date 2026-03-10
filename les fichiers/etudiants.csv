@@ -1,0 +1,16 @@
+ID,Nom,Age,Mathematiques,Physique,Informatique,Absences
+1,Alice Dupont,18,15.5,14.0,16.5,2
+2,Bob Martin,19,12.0,10.5,13.0,5
+3,Claire Petit,18,17.0,16.5,18.0,0
+4,David Blanc,20,9.5,8.0,11.0,12
+5,Emma Noir,19,14.5,15.0,14.0,3
+6,Felix Rouge,18,11.0,12.5,10.5,8
+7,Grace Vert,19,16.0,17.5,16.0,1
+8,Hugo Bleu,20,8.0,7.5,9.0,15
+9,Iris Jaune,18,13.5,14.5,15.0,4
+10,Jules Rose,19,10.5,11.0,12.5,6
+11,Kara Violet,,18.0,17.0,19.0,0
+12,Leon Gris,20,7.5,150.0,8.5,20
+13,Marie Orange,19,15.0,14.5,16.0,2
+14,Noah Brun,18,555,13.0,14.5,7
+15,Olivia Cyan,19,16.5,15.5,17.5,1
