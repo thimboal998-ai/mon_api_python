@@ -111,11 +111,10 @@ class DataProcessor:
         """
         col_name_lower = str(col_name).lower().strip()
         
-        # 1. Noms typiques
+        # 1. Noms typiques (Seulement techniques)
         index_keywords = [
             'unnamed: 0', 'unnamed:0', 'unnamed_0',
             'index', 'level_0', 'level_1',
-            'id', 'rowid', 'row_id', 'row id',
             '__index__', '_index', 'idx'
         ]
         
@@ -168,19 +167,24 @@ class DataProcessor:
         print("\n🔍 Analyse des types de colonnes...")
         
         for col in self.df.columns:
-            if self.df[col].dtype == 'object':
+            if pd.api.types.is_object_dtype(self.df[col]) or pd.api.types.is_string_dtype(self.df[col]):
                 # Tester si la colonne peut être numérique (au moins 50% de chiffres)
-                # On nettoie les espaces et on tente la conversion
-                s_clean = self.df[col].astype(str).str.strip().replace(['nan', 'None', 'null'], np.nan)
+                # On ignore les marqueurs de valeurs manquantes communs pour le calcul du ratio
+                na_markers = ['nan', 'none', 'null', 'na', 'n/a', '--', 'missing', 'unknown', 'inconnu', 'vide', '?', 'NULL', '#N/A']
+                s_clean = self.df[col].astype(str).str.strip().str.lower()
                 
-                # Compter combien de valeurs sont "numériques-like"
-                numeric_count = pd.to_numeric(s_clean, errors='coerce').notnull().sum()
-                non_null_count = s_clean.notnull().sum()
+                # Masque pour les valeurs non-vides et non-NA
+                mask_not_na = ~s_clean.isin(na_markers) & (s_clean != '')
                 
-                if non_null_count > 0 and (numeric_count / non_null_count) > 0.5:
-                    print(f"   🔄 Conversion de '{col}' en type numérique (Coercion)...")
-                    self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
-                    self.df_original[col] = pd.to_numeric(self.df_original[col], errors='coerce')
+                if mask_not_na.any():
+                    # Calculer le ratio de valeurs numériques parmi les non-vides
+                    numeric_count = pd.to_numeric(s_clean[mask_not_na], errors='coerce').notnull().sum()
+                    non_null_count = mask_not_na.sum()
+                    
+                    if (numeric_count / non_null_count) > 0.5:
+                        print(f"   🔄 Conversion de '{col}' en type numérique (Coercion)...")
+                        self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
+                        self.df_original[col] = pd.to_numeric(self.df_original[col], errors='coerce')
     def _clean_nan_values(self, obj):
         """
     Remplace récursivement NaN et Infinity par None
@@ -342,9 +346,15 @@ class DataProcessor:
                             val = self.df[col].median()
                         elif strategy == 'mode' or strategy == 'auto':
                             if is_numeric:
-                                # Pour les numériques : mode ou médiane
-                                mode_res = self.df[col].mode()
-                                val = mode_res[0] if not mode_res.empty else self.df[col].median()
+                                # Pour les numériques : 
+                                # En 'mode' strict, on prend le mode.
+                                # En 'auto', préférer la médiane pour éviter le piège des valeurs uniques 
+                                # (comme les ID ou adresses où le mode renvoie la première valeur)
+                                if strategy == 'mode':
+                                    mode_res = self.df[col].mode()
+                                    val = mode_res[0] if not mode_res.empty else self.df[col].median()
+                                else:
+                                    val = self.df[col].median()
                             else:
                                 # 🛡️ Pour les colonnes texte/catégorielles : utiliser 'Inconnu'
                                 # au lieu du mode global qui peut être hors contexte
@@ -412,15 +422,19 @@ class DataProcessor:
                     median_col = non_nan.median()
                     
                     # 🛡️ CV ROBUSTE = IQR / médiane (insensible aux extrêmes).
-                    # Permet de détecter les distributions naturellement très étalées
-                    # (comptages de votes, populations) sans être trompé par les outliers eux-mêmes.
-                    # Un CV robuste > 0.6 indique une dispersion naturellement très large
-                    # où chaque valeur est légitime (pas un outlier de mesure).
+                    # On s'assure de ne pas supprimer des données naturellement très étalées
+                    # (ex: élections) sauf si le Kurtosis est élevé (tails marqués).
                     if median_col != 0:
                         rcv = IQR / abs(median_col)
-                        if rcv > 0.6:
-                            print(f"   ⏭️ Colonne '{col}' ignorée (dispersion naturelle élevée, rCV={rcv:.2f})")
+                        kurt = float(non_nan.kurtosis())
+                        
+                        # Si RCV > 1.5 ET Kurtosis < 3.0, on considère que c'est une 
+                        # distribution naturellement large et on ignore.
+                        if rcv > 1.5 and kurt < 3.0:
+                            print(f"   ⏭️ Colonne '{col}' ignorée (dispersion naturelle, rCV={rcv:.2f}, Kurt={kurt:.2f})")
                             continue
+                        elif rcv > 1.0:
+                            print(f"   🎯 Colonne '{col}' traitée car rCV={rcv:.2f} et Kurt={kurt:.2f} (outliers probables)")
                     
                     lower = Q1 - 1.5 * IQR
                     upper = Q3 + 1.5 * IQR
@@ -447,10 +461,11 @@ class DataProcessor:
                     IQR = Q3 - Q1
                     median_col = non_nan.median()
                     
-                    # 🛡️ Même vérification rCV robuste que dans la phase de détection
+                    # 🛡️ Même vérification que dans la phase de détection
                     if median_col != 0:
                         rcv = IQR / abs(median_col)
-                        if rcv > 0.6:
+                        kurt = float(non_nan.kurtosis())
+                        if rcv > 1.5 and kurt < 3.0:
                             continue
                     
                     lower = Q1 - 1.5 * IQR

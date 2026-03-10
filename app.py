@@ -340,6 +340,15 @@ def read_file(filepath):
         elif extension == 'xml':
             print(f"\n📖 Lecture XML : {filepath}")
             df = pd.read_xml(filepath)
+            
+            # 🛡️ pd.read_xml ne supporte pas na_values. 
+            # On doit remplacer manuellement les chaînes communes de valeurs manquantes.
+            na_markers = ['NA', 'n/a', 'na', '--', 'null', 'None', '', ' ', 
+                        'Missing', 'Unknown', 'inconnu', 'N/A', 'vide', 'Unknown', 
+                        '?', 'NULL', '#N/A']
+            for marker in na_markers:
+                df = df.replace(marker, np.nan)
+                
             print(f"   Lignes : {len(df)}, Colonnes brutes : {len(df.columns)}")
             
         else:
