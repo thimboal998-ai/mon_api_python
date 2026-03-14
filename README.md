@@ -18,3 +18,6 @@ Lancer l’application python app.py
 
 Puis lancez l'installation
 pip install -r requirements.txt
+
+
+NB: il faut créer un fichier nommé .env et copier alpha.text le coller dans .env et enlever le # à la ligne 4 et 5. 
