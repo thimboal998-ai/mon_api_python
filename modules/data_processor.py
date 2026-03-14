@@ -181,8 +181,10 @@ class DataProcessor:
                     numeric_count = pd.to_numeric(s_clean[mask_not_na], errors='coerce').notnull().sum()
                     non_null_count = mask_not_na.sum()
                     
-                    if (numeric_count / non_null_count) > 0.5:
+                    # 💡 Seuil abaissé à 30% pour être plus tolérant aux colonnes avec quelques anomalies texte
+                    if (numeric_count / non_null_count) > 0.3:
                         print(f"   🔄 Conversion de '{col}' en type numérique (Coercion)...")
+                        # Conserver les erreurs comme NaN pour permettre le nettoyage
                         self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
                         self.df_original[col] = pd.to_numeric(self.df_original[col], errors='coerce')
     def _clean_nan_values(self, obj):
@@ -235,9 +237,30 @@ class DataProcessor:
                     if len(non_nan) < 2:
                         continue
                     
+                    # 🛡️ PROTECTION POUR PETITS DATASETS
+                    # Abaissé à 5 pour permettre le traitement sur de petits fichiers de test
+                    if len(non_nan) < 5:
+                        continue
+                        
                     Q1 = non_nan.quantile(0.25)
                     Q3 = non_nan.quantile(0.75)
                     IQR = Q3 - Q1
+                    median_col = non_nan.median()
+                    
+                    # 🛡️ PROTECTION POUR PETITS DATASETS
+                    # Abaissé à 5 pour permettre le traitement sur de petits fichiers de test
+                    if len(non_nan) < 5:
+                        continue
+                        
+                    # 🛡️ CV ROBUSTE = IQR / médiane (insensible aux extrêmes).
+                    if median_col != 0:
+                        rcv = IQR / abs(median_col)
+                        kurt = float(non_nan.kurtosis())
+                        
+                        # Si dispersion naturelle large, on ignore
+                        if rcv > 1.5 and kurt < 3.0:
+                            continue
+                    
                     lower = Q1 - 1.5 * IQR
                     upper = Q3 + 1.5 * IQR
                     
@@ -255,6 +278,7 @@ class DataProcessor:
                         total_outlier_values += outlier_count
                         
                 except Exception as e:
+                    print(f"   ⚠️ Erreur stats outliers sur '{col}': {str(e)}")
                     continue
             
             self.stats['lignes_avec_outliers'] = len(lignes_avec_outliers)
@@ -315,6 +339,9 @@ class DataProcessor:
         try:
             print(f"\n🛠️ Traitement des valeurs manquantes (stratégie : {strategy})...")
             
+            # 🔍 Nettoyer les anomalies catégorielles d'abord
+            self._clean_categorical_anomalies()
+            
             lignes_avant = int(self.df.isnull().any(axis=1).sum())
             
             if lignes_avant == 0:
@@ -362,12 +389,11 @@ class DataProcessor:
                                 # du dataset entier donnerait un mauvais état)
                                 val = "Inconnu"
                         
-                        # Fallback si val est toujours None
-                        if val is None:
-                            if is_numeric:
-                                val = self.df[col].median() if strategy != 'mean' else self.df[col].mean()
-                            else:
-                                val = "Inconnu"
+                        # Fallback si val est toujours None ou NaN (ex: colonne vide ou non numérique pour mean/median)
+                        if val is None or (isinstance(val, float) and np.isnan(val)):
+                            # Essayer le mode, sinon "Inconnu"
+                            mode_res = self.df[col].mode()
+                            val = mode_res[0] if not mode_res.empty else "Inconnu"
 
                         # Appliquer le remplissage
                         missing_indices = self.df[self.df[col].isnull()].index.tolist()
@@ -383,6 +409,18 @@ class DataProcessor:
             
             self.stats['valeurs_manquantes_traitees'] = valeurs_traitees
             
+            # 🛡️ RESTAURATION DES TYPES ENTIERS
+            # Si après remplissage la colonne peut être convertie en entier, on le fait
+            # pour éviter d'avoir des .0 partout
+            for col in self.df.columns:
+                if pd.api.types.is_numeric_dtype(self.df[col]):
+                    try:
+                        if (self.df[col] % 1 == 0).all():
+                            self.df[col] = self.df[col].astype('int64')
+                            print(f"   🔢 Conversion de '{col}' en Int64 (restauré)")
+                    except:
+                        pass
+
             self.transformation_history.append({
                 'step': 'handle_missing_values',
                 'strategy': strategy,
@@ -421,6 +459,10 @@ class DataProcessor:
                     IQR = Q3 - Q1
                     median_col = non_nan.median()
                     
+                    # 🛡️ PROTECTION POUR PETITS DATASETS
+                    if len(non_nan) < 5:
+                        continue
+                        
                     # 🛡️ CV ROBUSTE = IQR / médiane (insensible aux extrêmes).
                     # On s'assure de ne pas supprimer des données naturellement très étalées
                     # (ex: élections) sauf si le Kurtosis est élevé (tails marqués).
@@ -468,6 +510,10 @@ class DataProcessor:
                         if rcv > 1.5 and kurt < 3.0:
                             continue
                     
+                    # 🛡️ PROTECTION POUR PETITS DATASETS
+                    if len(non_nan) < 5:
+                        continue
+
                     lower = Q1 - 1.5 * IQR
                     upper = Q3 + 1.5 * IQR
                     
@@ -519,6 +565,32 @@ class DataProcessor:
         except Exception as e:
             print(f"❌ Erreur : {str(e)}")
             return 0
+    
+    def _clean_categorical_anomalies(self):
+        """
+        Détecte et nettoie les anomalies dans les colonnes catégorielles
+        Ex: '12' dans une colonne Y/N
+        """
+        print("\n🔍 Analyse des anomalies catégorielles...")
+        
+        for col in self.df.select_dtypes(include=['object']).columns:
+            counts = self.df[col].value_counts()
+            if len(counts) > 1 and len(counts) <= 5:
+                # Si la colonne a peu de valeurs uniques, c'est probablement une catégorie
+                top_values = set(counts.head(2).index)
+                
+                # Cas spécial Y/N ou True/False
+                is_boolean_like = any(val in top_values for val in ['Y', 'N', 'Yes', 'No', 'T', 'F', 'True', 'False'])
+                
+                if is_boolean_like:
+                    # Identifier les valeurs qui ne sont pas dans les top 2
+                    anomalies = self.df[~self.df[col].isin(top_values) & self.df[col].notnull()][col].unique()
+                    if len(anomalies) > 0:
+                        print(f"   ⚠️ Anomalies détectées dans '{col}' : {list(anomalies)}")
+                        mode_val = counts.index[0]
+                        for anon in anomalies:
+                            self.df[col] = self.df[col].replace(anon, mode_val)
+                        print(f"   ✅ Remplacées par la valeur dominante : '{mode_val}'")
     
     
     def remove_duplicates(self):
