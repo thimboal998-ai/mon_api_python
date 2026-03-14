@@ -1014,6 +1014,22 @@ def download_file(file_type, filename):
             else:
                 return jsonify({'error': 'Aucune analyse disponible'}), 400
 
+        elif file_type == 'json':
+            if current_processor:
+                filepath = os.path.join(app.config['PROCESSED_FOLDER'], filename)
+                current_processor.export_to_json(filepath)
+                mimetype = 'application/json'
+            else:
+                return jsonify({'error': 'Aucune analyse disponible'}), 400
+                
+        elif file_type == 'xml':
+            if current_processor:
+                filepath = os.path.join(app.config['PROCESSED_FOLDER'], filename)
+                current_processor.export_to_xml(filepath)
+                mimetype = 'application/xml'
+            else:
+                return jsonify({'error': 'Aucune analyse disponible'}), 400
+
         else:
             return jsonify({'error': 'Type de fichier invalide'}), 400
         

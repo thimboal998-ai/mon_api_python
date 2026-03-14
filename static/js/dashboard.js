@@ -1653,6 +1653,32 @@
                         <p class="text-xs text-muted-foreground">Multi-feuilles</p>
                     </div>
                 </button>
+
+                <button onclick="window.downloadFile('json')" class="w-full text-left px-4 py-3 hover:bg-white/5 rounded-lg transition-colors flex items-center gap-3">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="12" y1="18" x2="12" y2="12"></line>
+                        <line x1="9" y1="15" x2="12" y2="12"></line>
+                        <line x1="15" y1="15" x2="12" y2="12"></line>
+                    </svg>
+                    <div>
+                        <p class="text-sm font-semibold text-white">JSON</p>
+                        <p class="text-xs text-muted-foreground">Format web standard</p>
+                    </div>
+                </button>
+
+                <button onclick="window.downloadFile('xml')" class="w-full text-left px-4 py-3 hover:bg-white/5 rounded-lg transition-colors flex items-center gap-3">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <path d="M12 18l-3-3 3-3 3 3-3 3z"></path>
+                    </svg>
+                    <div>
+                        <p class="text-sm font-semibold text-white">XML</p>
+                        <p class="text-xs text-muted-foreground">Format hiérarchique</p>
+                    </div>
+                </button>
             </div>
         `;
 
@@ -1669,6 +1695,14 @@
         }, 100);
     }
 
+    // Helper to clean filename for download
+    function cleanFilename(originalFilename) {
+        if (!originalFilename) return 'data';
+        // Remove extension and replace non-alphanumeric characters with underscores
+        const baseName = originalFilename.substring(0, originalFilename.lastIndexOf('.')) || originalFilename;
+        return baseName.replace(/[^a-zA-Z0-9_.-]/g, '_');
+    }
+
     window.downloadFile = function (type) {
         if (!app.currentFilename) {
             showNotification('❌ Aucun fichier à télécharger. Veuillez d\'abord traiter un fichier.', 'error');
@@ -1676,48 +1710,30 @@
         }
 
         let filename;
+        const baseName = cleanFilename(app.currentFilename);
 
-        // Use server-provided filename if available (most robust)
-        if (app.csvFilename) {
-            const base = app.csvFilename.replace('cleaned_', '').replace('.csv', '');
-
-            switch (type) {
-                case 'csv':
-                    filename = app.csvFilename;
-                    break;
-                case 'pdf':
-                    filename = `rapport_${base}.pdf`;
-                    break;
-                case 'excel':
-                    filename = `rapport_${base}.xlsx`;
-                    break;
-                default:
-                    showNotification(`❌ Type de fichier inconnu : ${type}`, 'error');
-                    return;
-            }
-        }
-        // Fallback to client-side logic (fix for dots in filename)
-        else {
-            const baseName = app.currentFilename.substring(0, app.currentFilename.lastIndexOf('.')); // Correct split like Python rsplit
-
-            switch (type) {
-                case 'csv':
-                    filename = `cleaned_${baseName}.csv`;
-                    break;
-                case 'pdf':
-                    filename = `rapport_${baseName}.pdf`;
-                    break;
-                case 'excel':
-                    filename = `rapport_${baseName}.xlsx`;
-                    break;
-                default:
-                    showNotification(`❌ Type de fichier inconnu : ${type}`, 'error');
-                    return;
-            }
+        switch (type) {
+            case 'csv':
+                filename = app.csvFilename || `cleaned_${baseName}.csv`;
+                break;
+            case 'pdf':
+                filename = `rapport_${baseName}.pdf`;
+                break;
+            case 'excel':
+                filename = `rapport_${baseName}.xlsx`;
+                break;
+            case 'json':
+                filename = `cleaned_${baseName}.json`;
+                break;
+            case 'xml':
+                filename = `cleaned_${baseName}.xml`;
+                break;
+            default:
+                showNotification(`❌ Type de fichier inconnu : ${type}`, 'error');
+                return;
         }
 
         window.location.href = `/download/${type}/${filename}`;
-
         showNotification(`📥 Téléchargement de ${filename}...`, 'info');
     };
 

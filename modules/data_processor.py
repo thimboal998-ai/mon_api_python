@@ -383,11 +383,10 @@ class DataProcessor:
                                 else:
                                     val = self.df[col].median()
                             else:
-                                # 🛡️ Pour les colonnes texte/catégorielles : utiliser 'Inconnu'
-                                # au lieu du mode global qui peut être hors contexte
-                                # (ex: remplir State_Abbr manquant avec la valeur la + fréquente
-                                # du dataset entier donnerait un mauvais état)
-                                val = "Inconnu"
+                                # 🛡️ Pour les colonnes texte/catégorielles : utiliser le mode
+                                # qui est la valeur la plus présente dans la colonne
+                                mode_res = self.df[col].mode()
+                                val = mode_res[0] if not mode_res.empty else "Inconnu"
                         
                         # Fallback si val est toujours None ou NaN (ex: colonne vide ou non numérique pour mean/median)
                         if val is None or (isinstance(val, float) and np.isnan(val)):
@@ -589,6 +588,7 @@ class DataProcessor:
                         print(f"   ⚠️ Anomalies détectées dans '{col}' : {list(anomalies)}")
                         mode_val = counts.index[0]
                         for anon in anomalies:
+                            # Remplacer par le mode (valeur la plus présente)
                             self.df[col] = self.df[col].replace(anon, mode_val)
                         print(f"   ✅ Remplacées par la valeur dominante : '{mode_val}'")
     
@@ -851,7 +851,31 @@ class DataProcessor:
             print(f"\n💾 CSV exporté (sans index) : {filepath}")
             return filepath
         except Exception as e:
-            print(f"❌ Erreur export : {str(e)}")
+            print(f"❌ Erreur export CSV : {str(e)}")
+            return None
+    
+    
+    def export_to_json(self, filepath):
+        """Exporte les données nettoyées en JSON (format 'records', indenté)"""
+        try:
+            # S'assurer que les types JSON-incompatibles (NaN) sont gérés
+            self.df.to_json(filepath, orient='records', indent=4, force_ascii=False)
+            print(f"\n💾 JSON exporté : {filepath}")
+            return filepath
+        except Exception as e:
+            print(f"❌ Erreur export JSON : {str(e)}")
+            return None
+            
+            
+    def export_to_xml(self, filepath):
+        """Exporte les données nettoyées en XML"""
+        try:
+            # pd.to_xml requiert lxml pour être efficace, mais le format de base est suffisant
+            self.df.to_xml(filepath, index=False, root_name='data', row_name='record')
+            print(f"\n💾 XML exporté : {filepath}")
+            return filepath
+        except Exception as e:
+            print(f"❌ Erreur export XML : {str(e)}")
             return None
     
     
